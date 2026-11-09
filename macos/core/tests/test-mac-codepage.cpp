@@ -14,6 +14,7 @@
 #include "mem/CMemory.h"
 #include "mem/CNativeW.h"
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -271,11 +272,178 @@ TEST(MacCodePage, Utf7)
 	EXPECT_EQ(GetLastError(), DWORD(ERROR_INVALID_FLAGS));
 }
 
+namespace {
+
+//! "1B 24 42" 形式的十六进制 → 字节串
+std::string Hex(std::string_view h)
+{
+	std::string s;
+	for (std::size_t i = 0; i + 1 < h.size() + 1;) {
+		if (h[i] == ' ') { ++i; continue; }
+		s.push_back(char(std::stoi(std::string(h.substr(i, 2)), nullptr, 16)));
+		i += 2;
+	}
+	return s;
+}
+
+sakura::wstring U(std::initializer_list<int> cs)
+{
+	sakura::wstring w;
+	for (int c : cs) w.push_back(WCHAR(c));
+	return w;
+}
+
+} // namespace
+
+// ISO-2022-JP（50220/50221/50222）：预期值全部来自 Windows 上的探测结果（dump_codepages 的 iso2022-probe）
+TEST(MacCodePage, Iso2022JpWrite)
+{
+	for (UINT cp : { 50220u, 50221u, 50222u }) {
+		SCOPED_TRACE(cp);
+		EXPECT_EQ(ToMulti(cp, LTEXT("aあ")), Hex("61 1B2442 2422 1B2842"));
+		// 状态只在需要时切换，NEC 特殊文字也是 JIS X 0208（以前用 iconv 时每个字都会重新切换）
+		EXPECT_EQ(ToMulti(cp, U({ 0x3042, 0x3044, 0x2460, 0x3046 })), Hex("1B2442 2422 2424 2D21 2426 1B2842"));
+		// CP932 以外的字符用 JIS X 0212
+		EXPECT_EQ(ToMulti(cp, U({ 0x00E9, 0x3042, 0x00E9, 0x61 })), Hex("1B242844 2B31 1B2442 2422 1B242844 2B31 1B2842 61"));
+		EXPECT_EQ(ToMulti(cp, U({ 0x2170 })), Hex("1B242844 7321 1B2842"));
+		EXPECT_EQ(ToMulti(cp, U({ 0x7E8A })), Hex("1B242844 5463 1B2842"));
+		for (int c : { 0x2252, 0x301C, 0x2212, 0x00AC, 0x2016, 0x3000, 0xE000, 0x2116, 0x2235, 0x00B4, 0xFF3C }) {
+			EXPECT_EQ(ToMulti(cp, U({ c })).substr(0, 3), "\x1B$B") << std::hex << c;
+		}
+		EXPECT_EQ(ToMulti(cp, U({ 0xE000 })), Hex("1B2442 7521 1B2842"));
+		// 无法转换的字符只把它自己换成 '?'
+		for (int c : { 0x00A5, 0x203E, 0xFF5E, 0xFF0D, 0xFFE2, 0x2225, 0x00A0, 0x0080, 0xD800 }) {
+			EXPECT_EQ(ToMulti(cp, U({ c })), "?") << std::hex << c;
+		}
+		EXPECT_EQ(ToMulti(cp, U({ 0xD83D, 0xDE00 })), "??");
+		EXPECT_EQ(ToMulti(cp, U({ 0x3042, 0xD83D, 0xDE00, 0x3044 })), Hex("1B2442 2422 1B2842 3F3F 1B2442 2424 1B2842"));
+		EXPECT_EQ(ToMulti(cp, LTEXT("\\")), "\\");
+		// lpDefaultChar、lpUsedDefaultChar 不接受（87），标志不接受（1004）
+		BOOL used = FALSE;
+		const WCHAR a = LCHAR('a');
+		char buf[16];
+		EXPECT_EQ(WideCharToMultiByte(cp, 0, &a, 1, buf, 16, nullptr, &used), 0);
+		EXPECT_EQ(GetLastError(), DWORD(ERROR_INVALID_PARAMETER));
+		EXPECT_EQ(WideCharToMultiByte(cp, WC_NO_BEST_FIT_CHARS, &a, 1, buf, 16, nullptr, nullptr), 0);
+		EXPECT_EQ(GetLastError(), DWORD(ERROR_INVALID_FLAGS));
+	}
+	// 半角片假名：50220 换成全角，50221 用 ESC ( I，50222 用 ESC ( J + SO
+	EXPECT_EQ(ToMulti(50220, U({ 0x61, 0xFF71, 0xFF72, 0x62 })), Hex("61 1B2442 2522 2524 1B2842 62"));
+	EXPECT_EQ(ToMulti(50220, U({ 0xFF76, 0xFF9E })), Hex("1B2442 252B 212B 1B2842"));
+	EXPECT_EQ(ToMulti(50220, U({ 0xFF61, 0xFF9F, 0xFF65 })), Hex("1B2442 2123 212C 2126 1B2842"));
+	EXPECT_EQ(ToMulti(50220, U({ 0xFF71, 0x0D, 0x0A })), Hex("1B2442 2522 1B2842 0D0A"));
+	EXPECT_EQ(ToMulti(50221, U({ 0x61, 0xFF71, 0xFF72, 0x62 })), Hex("61 1B2849 3132 1B2842 62"));
+	EXPECT_EQ(ToMulti(50221, U({ 0x3042, 0xFF71, 0x3044 })), Hex("1B2442 2422 1B2849 31 1B2442 2424 1B2842"));
+	EXPECT_EQ(ToMulti(50221, U({ 0x3042, 0xFF71, 0x78, 0xFF72 })), Hex("1B2442 2422 1B2849 31 1B2842 78 1B2849 32 1B2842"));
+	EXPECT_EQ(ToMulti(50221, U({ 0xFF76, 0xFF9E })), Hex("1B2849 365E 1B2842"));
+	EXPECT_EQ(ToMulti(50222, U({ 0x61, 0xFF71, 0xFF72, 0x62 })), Hex("61 1B284A 0E 3132 1B2842 62"));
+	EXPECT_EQ(ToMulti(50222, U({ 0xFF71, 0x3042 })), Hex("1B284A 0E 31 1B2442 2422 1B2842"));
+	EXPECT_EQ(ToMulti(50222, U({ 0x3042, 0xFF71, 0x78, 0xFF72 })), Hex("1B2442 2422 1B284A 0E 31 1B2842 78 0E 32 1B2842"));
+	EXPECT_EQ(ToMulti(50222, U({ 0xFF61, 0xFF9F, 0xFF65 })), Hex("1B284A 0E 215F25 1B2842"));
+	EXPECT_EQ(ToMulti(50222, U({ 0xFF71, 0x0D, 0x0A })), Hex("1B284A 0E 31 1B2842 0D0A"));
+}
+
+TEST(MacCodePage, Iso2022JpRead)
+{
+	for (UINT cp : { 50220u, 50221u, 50222u }) {
+		SCOPED_TRACE(cp);
+		EXPECT_EQ(ToWide(cp, Hex("61 1B2442 2422 1B2842")), LTEXT("aあ"));
+		EXPECT_EQ(ToWide(cp, Hex("1B2849 3132 1B2842 78")), U({ 0xFF71, 0xFF72, 0x78 }));   // 三个代码页都能读半角片假名
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 2D21")), U({ 0x2460 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 7921 7C7E")), U({ 0xE178, 0xE2EF }));
+		EXPECT_EQ(ToWide(cp, Hex("1B242844 2B31 1B2842")), U({ 0xE9 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 2141 215D 2131 1B2842")), U({ 0x301C, 0x2212, 0xFFE3 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B284A 785C7E 1B2842")), LTEXT("x\\~"));
+		EXPECT_EQ(ToWide(cp, Hex("1B2440 2422 1B2842")), LTEXT("あ"));
+		// 不正确的输入：不会把后面的内容丢掉
+		EXPECT_EQ(ToWide(cp, Hex("61 1B2442 2422 FF 626364")), U({ 0x61, 0x3042, 0xF8F3, 0x77E3, 0x30FB }));
+		EXPECT_EQ(ToWide(cp, Hex("61 1B2442 2422 1B2842 62 FF 6364")), U({ 0x61, 0x3042, 0x62, 0xFF, 0x63, 0x64 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 7F7F 1B2842 7A")), U({ 0xF8F3, 0xF8F3, 0x7A }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 7521 7F21")), U({ 0xE000, 0xF8F3, 0x30FB }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 2422 0D0A 2424")), U({ 0x3042, 0x8D, 0x8A, 0x3044 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 24 0D0A")), U({ 0x30FB, 0x0A }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 24")), U({ 0x24 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 2422 24")), U({ 0x3042, 0x24 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 217F")), U({ 0x30FB }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 2D7E 1B2842")), U({ 0x30FB }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 8080")), U({ 0x80, 0x80 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 0000")), U({ 0, 0 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 2422 0E 2424")), U({ 0x3042, 0xFF64, 0x24 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2442 2422 1B2849")), U({ 0x3042 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2849 31 0D0A 32")), U({ 0xFF71, 0x30FB, 0x30FB, 0xFF72 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2849 607E A120")), U({ 0x30FB, 0x30FB, 0xFF61, 0x30FB }));
+		EXPECT_EQ(ToWide(cp, Hex("0E 3132 0F 78")), U({ 0x31, 0x32, 0x0F, 0x78 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2949 0E 3132 0F 78")), U({ 0x1B, 0x29, 0x49, 0x31, 0x32, 0x0F, 0x78 }));
+		EXPECT_EQ(ToWide(cp, Hex("B1B2 78")), U({ 0xB1, 0xB2, 0x78 }));
+		EXPECT_EQ(ToWide(cp, Hex("61 1B")), U({ 0x61, 0x1B }));
+		EXPECT_EQ(ToWide(cp, Hex("61 1B24")), U({ 0x61, 0x1B, 0x24 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B2441 3021")), U({ 0x1B, 0x24, 0x41, 0x30, 0x21 }));
+		EXPECT_EQ(ToWide(cp, Hex("1B242851 2422")), U({ 0x1B, 0x24, 0x28, 0x51, 0x24, 0x22 }));
+		// MB_ERR_INVALID_CHARS 不接受（1004，与 Windows 相同）
+		WCHAR buf[8];
+		EXPECT_EQ(MultiByteToWideChar(cp, MB_ERR_INVALID_CHARS, "a", 1, buf, 8), 0);
+		EXPECT_EQ(GetLastError(), DWORD(ERROR_INVALID_FLAGS));
+		CPINFOEX info{};
+		ASSERT_TRUE(GetCPInfoEx(cp, 0, &info));
+		EXPECT_EQ(info.MaxCharSize, 5u);
+		EXPECT_EQ(info.DefaultChar[0], '?');
+		EXPECT_EQ(info.UnicodeDefaultChar, LCHAR('?'));
+		EXPECT_TRUE(IsValidCodePage(cp));
+	}
+}
+
+// 其他 ISO-2022 系、HZ 由 iconv 实现。iconv 的实现（macOS 和 Linux）不同，这里只测不依赖实现的部分
 TEST(MacCodePage, IconvCodePages)
 {
-	// ISO-2022 系、HZ 由 iconv 实现
-	EXPECT_EQ(ToMulti(50220, LTEXT("aあ")), "a\x1B$B$\"\x1B(B");
-	EXPECT_EQ(ToWide(50220, "a\x1B$B$\"\x1B(B"), LTEXT("aあ"));
+	for (UINT cp : { 50225u, 50227u, 50229u, 52936u }) {
+		if (!IsValidCodePage(cp)) continue;   // Linux 的 iconv 可能没有
+		SCOPED_TRACE(cp);
+		CPINFOEX info{};
+		ASSERT_TRUE(GetCPInfoEx(cp, 0, &info));
+		EXPECT_EQ(info.MaxCharSize, 5u);
+		EXPECT_EQ(info.UnicodeDefaultChar, LCHAR('?'));
+		// 往返
+		const sakura::wstring text = cp == 50225 ? LTEXT("a가b\r\n한c") : LTEXT("a中文b\r\n汉c");
+		EXPECT_EQ(ToWide(cp, ToMulti(cp, text)), text);
+		// 无法转换的字符只把它自己换成 '?'，前后的字符都保留
+		const std::string m = ToMulti(cp, U({ 0x61, 0xD83D, 0xDE00, 0x62 }));
+		EXPECT_EQ(ToWide(cp, m), LTEXT("a?b"));
+		// MB_ERR_INVALID_CHARS、lpUsedDefaultChar 不接受
+		WCHAR wbuf[8];
+		EXPECT_EQ(MultiByteToWideChar(cp, MB_ERR_INVALID_CHARS, "a", 1, wbuf, 8), 0);
+		EXPECT_EQ(GetLastError(), DWORD(ERROR_INVALID_FLAGS));
+		BOOL used = FALSE;
+		const WCHAR a = LCHAR('a');
+		char buf[16];
+		EXPECT_EQ(WideCharToMultiByte(cp, 0, &a, 1, buf, 16, nullptr, &used), 0);
+		EXPECT_EQ(GetLastError(), DWORD(ERROR_INVALID_PARAMETER));
+	}
+	// HZ：不正确的字节后面的内容不会丢掉（以前 iconv 遇到不正确的字节就停止转换）
+	if (IsValidCodePage(52936)) {
+		const sakura::wstring w = ToWide(52936, Hex("61 7E7B 3C3A FF 7E7D 62"));
+		ASSERT_GE(w.size(), 3u);
+		EXPECT_EQ(w.substr(0, 2), U({ 0x61, 0x5DF1 }));
+		EXPECT_EQ(w.back(), LCHAR('b'));
+	}
+}
+
+// ISCII（57002〜57011）不支持：IsValidCodePage 为 FALSE，也不出现在列表里
+TEST(MacCodePage, IsciiNotSupported)
+{
+	static std::vector<UINT> cps;
+	cps.clear();
+	EnumSystemCodePages([](WCHAR* name) -> BOOL {
+		cps.push_back(UINT(std::stoul(sakura::u16::to_utf8(name))));
+		return TRUE;
+	}, CP_INSTALLED);
+	for (UINT cp = 57002; cp <= 57011; ++cp) {
+		EXPECT_FALSE(IsValidCodePage(cp)) << cp;
+		EXPECT_EQ(std::find(cps.begin(), cps.end(), cp), cps.end()) << cp;
+	}
+	// ISO-2022-JP 三个代码页总是在列表里
+	for (UINT cp : { 50220u, 50221u, 50222u }) {
+		EXPECT_NE(std::find(cps.begin(), cps.end(), cp), cps.end()) << cp;
+	}
 }
 
 // 原版没有直接测试 CCodePage 类（任意代码页的读写）的用例，Mac 版在这里补上
