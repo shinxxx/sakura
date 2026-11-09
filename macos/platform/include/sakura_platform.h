@@ -341,7 +341,11 @@ void OutputDebugStringW(const WCHAR* lpOutputString);
 void OutputDebugStringA(const char* lpOutputString);
 //! 中断到调试器
 void DebugBreak();
-//! 释放动态库（dlclose）。语言资源 DLL 在 Mac 版不使用，这里只为让持有句柄的类能编译
+//! 原版运行时加载的 DLL（bregonig.dll 等）在 Mac 版是静态链接的。下面三个函数按 DLL 名
+//! 找到对应的函数表，未登记的名字返回 nullptr（见 macos/platform/src/static_modules.cpp）
+typedef INT_PTR (*FARPROC)();
+HMODULE LoadLibraryW(const WCHAR* lpLibFileName);
+FARPROC GetProcAddress(HMODULE hModule, const char* lpProcName);
 BOOL FreeLibrary(HMODULE hLibModule);
 //! 最近一次错误码
 DWORD GetLastError();
@@ -350,7 +354,10 @@ void SetLastError(DWORD dwErrCode);
 /* ---- 文件 ---- */
 #define ERROR_FILE_NOT_FOUND      2L
 #define ERROR_ACCESS_DENIED       5L
+#define ERROR_INVALID_HANDLE      6L
 #define ERROR_INVALID_PARAMETER   87L
+#define ERROR_MOD_NOT_FOUND       126L
+#define ERROR_PROC_NOT_FOUND      127L
 #define ERROR_INSUFFICIENT_BUFFER 122L
 #define ERROR_INVALID_FLAGS       1004L
 #define ERROR_NO_UNICODE_TRANSLATION 1113L

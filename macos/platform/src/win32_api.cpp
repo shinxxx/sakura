@@ -15,7 +15,6 @@
 #include <string>
 #include <thread>
 
-#include <dlfcn.h>
 #include <sys/stat.h>
 
 #if defined(__APPLE__)
@@ -178,11 +177,6 @@ void DebugBreak()
 #  endif
 #endif
 	std::raise(SIGTRAP);
-}
-
-BOOL FreeLibrary(HMODULE hLibModule)
-{
-	return (hLibModule && ::dlclose(reinterpret_cast<void*>(hLibModule)) == 0) ? TRUE : FALSE;
 }
 
 static thread_local DWORD t_lastError = 0;

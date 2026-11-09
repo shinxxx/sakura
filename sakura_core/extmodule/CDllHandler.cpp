@@ -22,6 +22,7 @@ namespace {
 	@param[in] pszName DLLの名前。フルパスか、実行ファイルのフォルダーからの相対パス
 	@return 相対パスなら実行ファイルのフォルダーを前に付けたパス。フルパスならそのまま
 */
+#if defined(_WIN32)	// Mac 版は DLL を静的リンクしていて、名前だけで探す（macos/platform/src/static_modules.cpp）
 std::filesystem::path GetDllLoadPath( LPCWSTR pszName )
 {
 	std::filesystem::path dllPath{ pszName };
@@ -30,6 +31,7 @@ std::filesystem::path GetDllLoadPath( LPCWSTR pszName )
 	}
 	return dllPath;
 }
+#endif
 
 } // namespace
 
@@ -91,7 +93,11 @@ EDllResult CDllImp::InitDll(LPCWSTR pszSpecifiedDllName)
 
 		//DLLロード。相対パスは実行ファイルのフォルダーにあるものとして読み込む(カレントディレクトリは変えない)。
 		//ロードできなかったら次の名前候補を試す。
+#if defined(_WIN32)
 		m_hInstance = ::LoadLibraryW( GetDllLoadPath( pszName ).c_str() );
+#else
+		m_hInstance = ::LoadLibraryW( pszName );
+#endif
 		if(!m_hInstance)continue;
 
 		//初期処理
