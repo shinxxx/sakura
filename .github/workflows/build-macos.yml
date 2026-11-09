@@ -106,7 +106,7 @@ jobs:
           call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
           cl /nologo /std:c++20 /EHsc /W4 /utf-8 /DUNICODE /D_UNICODE macos\tools\codepage_dump\dump_codepages.cpp /Fe:dump_codepages.exe || exit /b 1
           mkdir out
-          dump_codepages.exe out\codepages.bin out\codepages.tsv || exit /b 1
+          dump_codepages.exe out\codepages.bin out\codepages.tsv > probes.txt || (type probes.txt & exit /b 1)
           ver > out\windows-version.txt
           tar -czf codepages.tgz -C out codepages.bin codepages.tsv windows-version.txt || exit /b 1
           certutil -f -encode codepages.tgz codepages.b64 > nul || exit /b 1
@@ -125,6 +125,10 @@ jobs:
         run: |
           if not exist macos\platform\data\codepages.bin exit /b 0
           fc /b out\codepages.bin macos\platform\data\codepages.bin > nul || echo ::warning::codepages.bin differs from the table dumped on this Windows version
+
+      # 各代码页的探测结果（Mac 版的实现按这里核对）。放在最后，方便只看日志末尾
+      - name: Print probe results
+        run: type probes.txt
 
   build:
     needs: check-encoding
