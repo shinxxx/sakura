@@ -401,23 +401,40 @@ TEST(MacCodePage, Iso2022JpRead)
 	}
 }
 
-// 其他 ISO-2022 系、HZ 由 iconv 实现。iconv 的实现（macOS 和 Linux）不同，这里只测不依赖实现的部分
-TEST(MacCodePage, IconvCodePages)
+// ISO-2022-KR/CN、HZ：预期值来自 Windows 上的探测结果
+TEST(MacCodePage, Iso2022KrCnHz)
 {
+	EXPECT_EQ(ToMulti(50225, U({ 0x61, 0x2460, 0x62 })), Hex("61 1B242943 0E 2867 0F 62"));
+	EXPECT_EQ(ToMulti(50225, U({ 0xE9, 0x61 })), "?a");
+	EXPECT_EQ(ToMulti(50227, U({ 0x61, 0x2460, 0x62 })), Hex("61 1B242941 0E 2259 0F 62"));
+	EXPECT_EQ(ToMulti(50227, U({ 0xE9, 0x61 })), Hex("1B242941 0E 2826 0F 61"));
+	EXPECT_EQ(ToMulti(50229, U({ 0x61, 0x2460, 0x62 })), Hex("61 1B242947 0E 2621 0F 62"));
+	EXPECT_EQ(ToMulti(50229, U({ 0xE9, 0x61 })), "?a");
+	EXPECT_EQ(ToMulti(52936, U({ 0x61, 0x2460, 0x62 })), Hex("61 7E7B 2259 7E7D 62"));
+	EXPECT_EQ(ToMulti(52936, U({ 0xE9, 0x61 })), Hex("7E7B 2826 7E7D 61"));
+	EXPECT_EQ(ToWide(50225, Hex("61 1B242943 0E 2867 0F 62")), U({ 0x61, 0x2460, 0x62 }));
+	EXPECT_EQ(ToWide(50227, Hex("61 1B242941 0E 2259 0F 62")), U({ 0x61, 0x2460, 0x62 }));
+	EXPECT_EQ(ToWide(52936, Hex("61 7E7B 3C3A 7E7D 62")), U({ 0x61, 0x5DF1, 0x62 }));
+	EXPECT_EQ(ToWide(52936, Hex("7E7E")), LTEXT("~"));
 	for (UINT cp : { 50225u, 50227u, 50229u, 52936u }) {
-		if (!IsValidCodePage(cp)) continue;   // Linux 的 iconv 可能没有
 		SCOPED_TRACE(cp);
+		EXPECT_TRUE(IsValidCodePage(cp));
 		CPINFOEX info{};
 		ASSERT_TRUE(GetCPInfoEx(cp, 0, &info));
 		EXPECT_EQ(info.MaxCharSize, 5u);
 		EXPECT_EQ(info.UnicodeDefaultChar, LCHAR('?'));
-		// 往返
-		const sakura::wstring text = cp == 50225 ? LTEXT("a가b\r\n한c") : LTEXT("a中文b\r\n汉c");
+		// 往返（指示序列只在第一次用到时输出，之后只用 SO / SI 切换）
+		const sakura::wstring text = cp == 50225 ? LTEXT("a가b\r\n한c~") : LTEXT("a中文b\r\n中c~");
 		const std::string encoded = ToMulti(cp, text);
 		EXPECT_EQ(ToWide(cp, encoded), text) << HexDump(encoded);
 		// 无法转换的字符只把它自己换成 '?'，前后的字符都保留
 		const std::string m = ToMulti(cp, U({ 0x61, 0xD83D, 0xDE00, 0x62 }));
-		EXPECT_EQ(ToWide(cp, m), LTEXT("a?b")) << HexDump(m);
+		EXPECT_EQ(m, "a??b");
+		// 不正确的字节后面的内容不会丢掉
+		const sakura::wstring w = ToWide(cp, cp == 52936 ? Hex("61 7E7B 3C3A FF 7E7D 62") : Hex("61 0E FF 0F 62"));
+		ASSERT_GE(w.size(), 3u);
+		EXPECT_EQ(w.front(), LCHAR('a'));
+		EXPECT_EQ(w.back(), LCHAR('b'));
 		// MB_ERR_INVALID_CHARS、lpUsedDefaultChar 不接受
 		WCHAR wbuf[8];
 		EXPECT_EQ(MultiByteToWideChar(cp, MB_ERR_INVALID_CHARS, "a", 1, wbuf, 8), 0);
@@ -427,17 +444,6 @@ TEST(MacCodePage, IconvCodePages)
 		char buf[16];
 		EXPECT_EQ(WideCharToMultiByte(cp, 0, &a, 1, buf, 16, nullptr, &used), 0);
 		EXPECT_EQ(GetLastError(), DWORD(ERROR_INVALID_PARAMETER));
-	}
-	// 能读 Windows 写出的内容（字节来自 Windows 上的探测结果）
-	if (IsValidCodePage(50225)) EXPECT_EQ(ToWide(50225, Hex("61 1B242943 0E 2867 0F 62")), U({ 0x61, 0x2460, 0x62 }));
-	if (IsValidCodePage(50227)) EXPECT_EQ(ToWide(50227, Hex("61 1B242941 0E 2259 0F 62")), U({ 0x61, 0x2460, 0x62 }));
-	if (IsValidCodePage(52936)) EXPECT_EQ(ToWide(52936, Hex("61 7E7B 3C3A 7E7D 62")), U({ 0x61, 0x5DF1, 0x62 }));
-	// HZ：不正确的字节后面的内容不会丢掉（以前 iconv 遇到不正确的字节就停止转换）
-	if (IsValidCodePage(52936)) {
-		const sakura::wstring w = ToWide(52936, Hex("61 7E7B 3C3A FF 7E7D 62"));
-		ASSERT_GE(w.size(), 3u);
-		EXPECT_EQ(w.substr(0, 2), U({ 0x61, 0x5DF1 }));
-		EXPECT_EQ(w.back(), LCHAR('b'));
 	}
 }
 

@@ -19,7 +19,7 @@
 2. `build-macos.yml` 的 `codepage-dump-windows` 任务每次都在 Windows 上重新导出，并与仓库里的表比较，不一致时给出警告。
 3. 导出结果 `macos/platform/data/codepages.bin`（格式第 2 版，119 个代码页，约 9.3 MB）用 `.incbin` 嵌入核心库，由 `macos/platform/src/codepage.cpp` 读取。
 
-其他代码页（GB18030 和 UTF-7 起初用 macOS 的 iconv，但 macOS 自带的 libiconv 版本较旧，GB18030 无法转换表情符号等补充平面字符、UTF-7 的 `-` 处理也与 Windows 不同，所以改为自己实现）：
+其他代码页（GB18030、UTF-7、ISO-2022 系起初用 macOS 的 iconv，但 macOS 自带的 libiconv 版本较旧，GB18030 无法转换表情符号等补充平面字符、UTF-7 的 `-` 处理也与 Windows 不同，所以改为自己实现）：
 
 | 代码页 | 实现 | 与 Windows 的差异 |
 |---|---|---|
@@ -27,7 +27,7 @@
 | 54936 GB18030 | 转换表 + 代码 | 无。1、2 字节和 BMP 的 4 字节字符来自 Windows 导出的表，补充平面按公式计算；不正确序列、参数检查按 `gb18030-probe` / `param-probe` 核对 |
 | 65000 UTF-7 | 代码实现 | 无。直接输出的字符、base64 块的开始和结束、不正确输入、参数检查都按 `utf7-probe` / `param-probe` 核对 |
 | 50220/50221/50222 ISO-2022-JP | 代码实现（字符对应用 20932 EUC-JP 的表） | 无（按 `iso2022-probe` 核对）。Windows 的这三个代码页相当于 EUC-JP 外加一层转换：JIS X 0208 用 `ESC $ B`，CP932 以外的字符（é、ⅰ、纊等）用 JIS X 0212 `ESC $ ( D`；半角片假名 50220 换成全角、50221 用 `ESC ( I`、50222 用 `ESC ( J` + SO；读取时三者相同。原版的 JIS 读写用自己的 `CJis`，不经过这里 |
-| 50225、50227、50229、52936 HZ | 系统的 iconv | 不正确的字节换成 U+FFFD 后继续转换（不丢后面的内容），无法转换的字符只把它自己换成 `?`。与 Windows 的差异：指示序列（如 `ESC $ ) C`）出现的位置、不正确输入的具体结果。Linux 的 glibc iconv 没有 52936 |
+| 50225 ISO-2022-KR、50227/50229 ISO-2022-CN、52936 HZ | 代码实现（字符对应分别用 51949、20936、20000、20936 的表） | 正常文本与 Windows 相同（按 `iso2022-probe` 核对）：指示序列 `ESC $ ) C` 等只在第一次用到双字节字符时输出，之后用 SO / SI（HZ 用 `~{` / `~}`）切换。不正确输入的具体结果与 Windows 不同（Windows 会输出奇怪的私用区字符），但不会丢掉后面的内容。换行后是否重新输出指示序列未在 Windows 上确认。不用 iconv：macOS 的 iconv 写不出 ISO-2022-KR/CN（全部变成 `?`），Linux 的 iconv 没有 HZ |
 | 57002〜57011 ISCII | 不支持 | iconv 也不支持，代码页列表里不出现 |
 
 导出工具在 Windows 上确认的参数规则（Mac 版照此实现）：

@@ -36,7 +36,7 @@
 1. **原来靠 DLLSHAREDATA.h 顺带引入的类型**：最多的是 `EFunctionCode`（992 处），其次是 `CMyPoint`、`SelectionRange` 等。需要在各文件里补上真正需要的 `#include`（第 16 步处理）。
 2. **GDI 绘图**：`FontHolder`、`MemDcHolder`、`SelectObject`、`DeleteObject` 等。这些属于界面层，会从核心库移出，由第 28 步的 Core Text 绘制替代。
 3. **COM/OLE**：`BSTR`、`VARIANT`、`IDataObject` 等，来自宏和拖放代码，也不进核心库。
-4. **编码 API**：`MultiByteToWideChar`、`IsValidCodePage` 等，第 17 步换成 ICU / iconv 实现。
+4. **编码 API**：`MultiByteToWideChar`、`IsValidCodePage` 等，第 17 步换成用 Windows 实测表与自己代码的实现（不用 ICU / iconv）。
 5. **时间 API**：`FileTimeToSystemTime` 等，第 16 步补实现。
 
 注意：`WCHAR` 暂时是 `wchar_t`（macOS 上 4 字节），第 14、15 步改为 UTF-16。
