@@ -226,6 +226,22 @@ void ProbeIso2022()
 		PrintWc(L"iso2022-probe", cp, w6, 3);
 		PrintWc(L"iso2022-probe", cp, w9, 2);
 	}
+	// 日文：CP932 扩展字符、JIS X 0212、JIS-Roman、各种不正确的输入
+	for (UINT cp : { 50220u, 50222u }) {
+		for (WCHAR c : { WCHAR(0x2170), WCHAR(0x7E8A), WCHAR(0x2252), WCHAR(0x00A5), WCHAR(0x203E), WCHAR(0xFF5E), WCHAR(0x301C),
+				WCHAR(0x2212), WCHAR(0xFF0D), WCHAR(0x00AC), WCHAR(0xFFE2), WCHAR(0x2225), WCHAR(0x2016), WCHAR(0x00A0), WCHAR(0x0080),
+				WCHAR(0x3000), WCHAR(0xE000), WCHAR(0xD800), WCHAR(0x2116), WCHAR(0x2235), WCHAR(0x00B4), WCHAR(0xFF3C), WCHAR(0x005C) }) {
+			PrintWc(L"iso2022-probe", cp, &c, 1);
+		}
+		const WCHAR e1[] = { 0xD83D, 0xDE00 }, e2[] = { 0x00E9, 0x3042, 0x00E9, L'a' }, e3[] = { 0xFF61, 0xFF9F, 0xFF65 };
+		PrintWc(L"iso2022-probe", cp, e1, 2); PrintWc(L"iso2022-probe", cp, e2, 4); PrintWc(L"iso2022-probe", cp, e3, 3);
+	}
+	const char* jp[] = { "\x1B$B\x2D\x21", "\x1B$B\x79\x21\x7C\x7E", "\x1B$(D\x2B\x31\x1B(B", "\x1B$B\x21\x41\x21\x5D\x21\x31\x1B(B",
+		"\x1B(J\x5C\x7E", "\x1B$B\x75\x21\x7F\x21", "\x1B$B$\"\r\n$$", "\x1B$B$\r\n", "\x1B(I1\r\n2", "\x1B(I\x60\x7E\xA1 ",
+		"\x1B$B$\"\x1B(I", "\x1B$B\x21\x7F", "\x1B$B\x80\x80", "a\x1B", "a\x1B$", "\x1B$A0!", "\x1B$(Q$\"", "\x0E\x31\x0F", "\x1B$B$\"\x0E$$",
+		"\x1B$B\x2D\x7E\x1B(B", "\x1B$B$\"$", "x\x1B$B$" };
+	for (const char* m : jp) PrintMb(L"iso2022-probe", 50220, m, static_cast<int>(strlen(m)));
+	PrintMb(L"iso2022-probe", 50220, "\x1B$B\0\0", 5);
 	const char* hz[] = { "a~{<:~}b", "a~{<:\xFF~}b", "~~", "a~{<:" };
 	for (const char* m : hz) PrintMb(L"iso2022-probe", 52936, m, static_cast<int>(strlen(m)));
 	const char* kr[] = { "\x1B$)Ca\x0E\x30\x21\x0F" "b", "\x1B$)Ca\x0E\xFF\x0F" "b" };

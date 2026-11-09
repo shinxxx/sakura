@@ -60,10 +60,10 @@
 | 修改 | 原因 |
 |---|---|
 | `charset/CCodePage.cpp`：代码页下拉框 `AddComboCodePages` 只在 Windows 上编译 | 界面部分，Mac 版用 AppKit 从 `GetCodePageList()` 生成 |
-| `charset/CESI.cpp`：调试用的 `GetDebugInfo` 只在 Windows 上编译 | 它读取编辑中的文档，第 19 步移植文档模型后再加入 |
+| `charset/CESI.cpp`：调试用的 `GetDebugInfo` 只在 Windows 上编译 | 它读取编辑中的文档，第 20 步移植文档模型后再加入 |
 | `charset/codeutil.cpp`：Mac 版用与 MSVC CRT 相同的计算实现 SJIS↔JIS 转换 | `_mbcjmstojis_l` 等是 MSVC 专有函数 |
 | `util/tchar_convert.cpp`：`CP_ACP` 按界面语言换成 Shift_JIS 的处理只在 Windows 上做 | Mac 版的 `CP_ACP` 就是 UTF-8 |
-| `io/CTextStream.cpp`：`CTextInputStream_AbsIni` 只在 Windows 上编译 | 依赖设置文件位置（util/file），第 20 步加入 |
+| `io/CTextStream.cpp`：`CTextInputStream_AbsIni` 只在 Windows 上编译 | 依赖设置文件位置（util/file），第 21 步加入 |
 | `window/CMainStatusBar.cpp`：Mac 版只编译 `UnicodeToHex` | 状态栏本身是 Windows 界面 |
 | `charset/CESI.h`：加上 `class CNativeW;` 前置声明 | 调试用函数的声明用到它；Windows 版靠预编译头间接引入，Mac 版的预编译头不含它。这样头文件可以单独包含 |
 | 测试 `test-cconvert`：`to_achar` / `to_wchar` 的预期值写成 Shift_JIS 字节；Shift_JIS 专有的检查在 Mac 上明确指定 `CP_SJIS` | Windows 版的窄字符串字面量是 Shift_JIS，Mac 版是 UTF-8 |
@@ -72,6 +72,6 @@
 ## 留到后续步骤
 
 - `test-cconvert` 里的 `ConvTest`（原版也只在 MSVC Debug 下运行）要打开编辑器窗口执行转换命令，随编辑器界面（阶段 2）加入。
-- `test-file`：测试对象主要是 `util/file`（设置文件位置等），移到第 20 步。
-- `CESI::GetDebugInfo`：第 19 步。
+- `test-file`：测试对象主要是 `util/file`（设置文件位置等），移到第 21 步。
+- `CESI::GetDebugInfo`：第 20 步。
 - 代码页名称目前是英文（导出时的 Windows 语言），界面本地化时（第 48 步）换成各语言的名称。

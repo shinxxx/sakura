@@ -192,7 +192,7 @@ void CTextOutputStream::WriteString(
 //                  CTextInputStream_AbsIni                    //
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //
 
-#if defined(_WIN32)	// Mac 版: 設定ファイルの場所（util/file）は移植計画のステップ 20 で移植する
+#if defined(_WIN32)	// Mac 版: 設定ファイルの場所（util/file）は移植計画のステップ 21 で移植する
 static const WCHAR* _Resolve(const WCHAR* fname, bool bOrExedir)
 {
 	if( _IS_REL_PATH( fname ) ){

@@ -3,7 +3,7 @@
 
 	核心库里有少数地方需要用到界面：测量文字宽度、显示消息框、读取界面字符串。
 	Windows 版直接调用 Win32 API；Mac 版由 App 启动时通过下面的 Set* 函数注册实现
-	（第 24 步的桥接层、第 27 步的 Core Text 绘制、第 47 步的本地化）。
+	（第 24 步的桥接层、第 28 步的 Core Text 绘制、第 48 步的本地化）。
 	没有注册时使用简单的默认实现，方便单元测试。
 
 	Copyright (C) 2026, Sakura Editor Organization

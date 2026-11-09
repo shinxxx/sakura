@@ -1281,7 +1281,7 @@ ECodeType CESI::CheckKanjiCode(const char* pBuf, size_t nBufLen) noexcept
 	return m_pEncodingConfig->m_eDefaultCodetype;
 }
 
-#if defined(_DEBUG) && defined(_WIN32)	// Mac 版: 編集中の文書を参照するので、移植計画のステップ 19（文書モデル）で有効にする
+#if defined(_DEBUG) && defined(_WIN32)	// Mac 版: 編集中の文書を参照するので、移植計画のステップ 20（文書モデル）で有効にする
 
 /*!
 	収集した情報をダンプする
