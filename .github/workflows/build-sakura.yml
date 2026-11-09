@@ -12,6 +12,8 @@ on:
       - .gitignore
       - .editorconfig
   pull_request:
+    branches-ignore:
+      - macos # 合并到 macos 的 PR 也只跑 build-macos.yml（同上，2026-11-09 项目负责人决定）
     paths-ignore:
       - '**/*.md'
       - .gitignore
