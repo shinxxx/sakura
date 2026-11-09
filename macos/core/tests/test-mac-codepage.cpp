@@ -15,6 +15,7 @@
 #include "mem/CNativeW.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -286,6 +287,14 @@ std::string Hex(std::string_view h)
 	return s;
 }
 
+std::string HexDump(std::string_view s)
+{
+	std::string r;
+	char b[4];
+	for (unsigned char c : s) { std::snprintf(b, sizeof(b), "%02X ", c); r += b; }
+	return r;
+}
+
 sakura::wstring U(std::initializer_list<int> cs)
 {
 	sakura::wstring w;
@@ -404,10 +413,11 @@ TEST(MacCodePage, IconvCodePages)
 		EXPECT_EQ(info.UnicodeDefaultChar, LCHAR('?'));
 		// 往返
 		const sakura::wstring text = cp == 50225 ? LTEXT("a가b\r\n한c") : LTEXT("a中文b\r\n汉c");
-		EXPECT_EQ(ToWide(cp, ToMulti(cp, text)), text);
+		const std::string encoded = ToMulti(cp, text);
+		EXPECT_EQ(ToWide(cp, encoded), text) << HexDump(encoded);
 		// 无法转换的字符只把它自己换成 '?'，前后的字符都保留
 		const std::string m = ToMulti(cp, U({ 0x61, 0xD83D, 0xDE00, 0x62 }));
-		EXPECT_EQ(ToWide(cp, m), LTEXT("a?b"));
+		EXPECT_EQ(ToWide(cp, m), LTEXT("a?b")) << HexDump(m);
 		// MB_ERR_INVALID_CHARS、lpUsedDefaultChar 不接受
 		WCHAR wbuf[8];
 		EXPECT_EQ(MultiByteToWideChar(cp, MB_ERR_INVALID_CHARS, "a", 1, wbuf, 8), 0);
@@ -418,6 +428,10 @@ TEST(MacCodePage, IconvCodePages)
 		EXPECT_EQ(WideCharToMultiByte(cp, 0, &a, 1, buf, 16, nullptr, &used), 0);
 		EXPECT_EQ(GetLastError(), DWORD(ERROR_INVALID_PARAMETER));
 	}
+	// 能读 Windows 写出的内容（字节来自 Windows 上的探测结果）
+	if (IsValidCodePage(50225)) EXPECT_EQ(ToWide(50225, Hex("61 1B242943 0E 2867 0F 62")), U({ 0x61, 0x2460, 0x62 }));
+	if (IsValidCodePage(50227)) EXPECT_EQ(ToWide(50227, Hex("61 1B242941 0E 2259 0F 62")), U({ 0x61, 0x2460, 0x62 }));
+	if (IsValidCodePage(52936)) EXPECT_EQ(ToWide(52936, Hex("61 7E7B 3C3A 7E7D 62")), U({ 0x61, 0x5DF1, 0x62 }));
 	// HZ：不正确的字节后面的内容不会丢掉（以前 iconv 遇到不正确的字节就停止转换）
 	if (IsValidCodePage(52936)) {
 		const sakura::wstring w = ToWide(52936, Hex("61 7E7B 3C3A FF 7E7D 62"));
